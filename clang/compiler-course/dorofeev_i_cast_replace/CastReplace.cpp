@@ -12,7 +12,7 @@ namespace {
 
 class CastReplaceVisitor : public RecursiveASTVisitor<CastReplaceVisitor> {
 public:
-    explicit CastReplaceVisitor(ASTContext *Context, Rewriter &R)
+    CastReplaceVisitor(ASTContext *Context, Rewriter &R)
         : Context(Context), Rewrite(R) {}
 
     bool VisitCStyleCastExpr(CStyleCastExpr *Cast) {
@@ -22,25 +22,46 @@ public:
         std::string CastType = "static_cast";
         CastKind Kind = Cast->getCastKind();
 
+        // 1. BitCast и конверсия указателей в числа — это reinterpret_cast
         if (Kind == CK_BitCast || Kind == CK_PointerToIntegral || Kind == CK_IntegralToPointer) {
             CastType = "reinterpret_cast";
+        
+        // 2. NoOp касты часто скрывают добавление/снятие const
         } else if (Kind == CK_NoOp) {
             QualType DestT = Cast->getType();
             QualType SrcT = SubExpr->getType();
-            if (DestT.isConstQualified() != SrcT.isConstQualified() ||
-                DestT.isVolatileQualified() != SrcT.isVolatileQualified()) {
-                CastType = "const_cast";
+            
+            // Извлекаем "внутренний" тип, если это указатели
+            if (DestT->isPointerType() && SrcT->isPointerType()) {
+                QualType DestPointee = DestT->getPointeeType();
+                QualType SrcPointee = SrcT->getPointeeType();
+                if (DestPointee.isConstQualified() != SrcPointee.isConstQualified() ||
+                    DestPointee.isVolatileQualified() != SrcPointee.isVolatileQualified()) {
+                    CastType = "const_cast";
+                }
+            } 
+            // И на всякий случай проверяем ссылки
+            else if (DestT->isReferenceType() && SrcT->isReferenceType()) {
+                QualType DestPointee = DestT->getPointeeType();
+                QualType SrcPointee = SrcT->getPointeeType();
+                if (DestPointee.isConstQualified() != SrcPointee.isConstQualified() ||
+                    DestPointee.isVolatileQualified() != SrcPointee.isVolatileQualified()) {
+                    CastType = "const_cast";
+                }
             }
         }
 
         std::string DestTypeStr = Cast->getTypeAsWritten().getAsString();
         std::string Replacement = CastType + "<" + DestTypeStr + ">(";
 
+        // Заменяем `(Type)` на `cxx_cast<Type>(`
         SourceRange CastRange(Cast->getLParenLoc(), Cast->getRParenLoc());
         Rewrite.ReplaceText(CastRange, Replacement);
 
+        // Получаем честный конец выражения и вставляем закрывающую скобку
+        // Используем InsertText вместо InsertTextAfterToken, чтобы избежать двойного сдвига
         SourceLocation EndLoc = Lexer::getLocForEndOfToken(SubExpr->getEndLoc(), 0, SM, Context->getLangOpts());
-        Rewrite.InsertTextAfterToken(EndLoc, ")");
+        Rewrite.InsertText(EndLoc, ")");
 
         return true;
     }
@@ -52,7 +73,7 @@ private:
 
 class CastReplaceConsumer final : public ASTConsumer {
 public:
-    explicit CastReplaceConsumer(ASTContext *Context, Rewriter &R)
+    CastReplaceConsumer(ASTContext *Context, Rewriter &R)
         : Visitor(Context, R) {}
 
     void HandleTranslationUnit(ASTContext &Context) override {
@@ -76,8 +97,7 @@ public:
 
     void EndSourceFileAction() override {
         SourceManager &SM = TheRewriter.getSourceMgr();
-        // Просто выводим весь буфер напрямую в поток ошибок, без дополнительных переменных
-        TheRewriter.getEditBuffer(SM.getMainFileID()).write(llvm::errs());
+        TheRewriter.getEditBuffer(SM.getMainFileID()).write(llvm::outs());
     }
 
 private:
