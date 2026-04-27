@@ -16,12 +16,12 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
   DorofeevLoopUnroll() : MachineFunctionPass(ID) {}
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<MachineLoopInfo>();
+    AU.addRequired<MachineLoopInfoWrapperPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
   bool runOnMachineFunction(MachineFunction &MF) override {
-    MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
+    MachineLoopInfo &MLI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
     bool Changed = false;
 
     for (auto *L : MLI) {
@@ -48,7 +48,7 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
 
     SmallVector<MachineInstr *, 8> BodyInstrs;
     for (auto &MI : *MBB) {
-      if (!MI.isBranch() && !MI.isTerminator()) {
+      if (!MI.isBranch() && !MI.isTerminator() && !MI.isDebugInstr()) {
         BodyInstrs.push_back(&MI);
       }
     }
@@ -76,7 +76,7 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
               MIB.add(MO); 
             }
           } else {
-            MIB.add(MO);
+            MIB.add(MO); 
           }
         }
       }
@@ -89,6 +89,7 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
 } // namespace
 
 char DorofeevLoopUnroll::ID = 0;
+
 static RegisterPass<DorofeevLoopUnroll> X("dorofeev-loop-unroll", 
-                                          "Backend Loop Unroll Pass (Max 5 Iterations)", 
+                                          "Backend Loop Unroll Pass", 
                                           false, false);
