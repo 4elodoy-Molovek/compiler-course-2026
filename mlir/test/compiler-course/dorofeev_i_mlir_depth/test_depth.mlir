@@ -1,4 +1,4 @@
-// RUN: mlir-opt --load-pass-plugin=%llvmshlibdir/dorofeev_i_mlir_depth_MLIR%shlibext --max-block-depth %s | FileCheck %s
+// RUN: mlir-opt --load-pass-plugin=/home/chelodoy/compilers/compiler-course-2026/build/lib/dorofeev_i_mlir_depth_MLIR.so --pass-pipeline="builtin.module(func.func(max-block-depth))" %s | FileCheck %s
 
 // CHECK: func.func @empty_func() attributes {max_block_depth = 0 : i32}
 func.func @empty_func() {
@@ -16,14 +16,15 @@ func.func @single_loop() {
   return
 }
 
-// CHECK: func.func @nested_structures() attributes {max_block_depth = 3 : i32}
+// Здесь исправили скобки на (%{{.*}})
+// CHECK: func.func @nested_structures(%{{.*}}) attributes {max_block_depth = 3 : i32}
 func.func @nested_structures(%cond: i1) {
   %c0 = arith.constant 0 : index
   %c10 = arith.constant 10 : index
   %c1 = arith.constant 1 : index
   
   // Уровень 1
-  scf.for %i = %c0 to %c10 step %c1 {
+  scf.for %i = %c0 to %c10 step %c1 { 
     // Уровень 2
     scf.if %cond {
       // Уровень 3
