@@ -1,7 +1,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -10,8 +10,8 @@ using namespace llvm;
 namespace {
 struct DorofeevLoopUnroll : public MachineFunctionPass {
   static char ID;
-  
-  const unsigned MaxIterations = 5; 
+
+  const unsigned MaxIterations = 5;
 
   DorofeevLoopUnroll() : MachineFunctionPass(ID) {}
 
@@ -55,17 +55,19 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
 
     for (unsigned i = 1; i < MaxIterations; ++i) {
       DenseMap<Register, Register> RegMap;
-      
+
       for (auto *MI : BodyInstrs) {
-        MachineInstrBuilder MIB = BuildMI(*MBB, MBB->getFirstTerminator(), 
-                                          MI->getDebugLoc(), TII->get(MI->getOpcode()));
-        
+        MachineInstrBuilder MIB =
+            BuildMI(*MBB, MBB->getFirstTerminator(), MI->getDebugLoc(),
+                    TII->get(MI->getOpcode()));
+
         for (auto &MO : MI->operands()) {
           if (MO.isReg()) {
             Register Reg = MO.getReg();
             if (Reg.isVirtual()) {
               if (MO.isDef()) {
-                Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
+                Register NewReg =
+                    MRI.createVirtualRegister(MRI.getRegClass(Reg));
                 RegMap[Reg] = NewReg;
                 MIB.addReg(NewReg, RegState::Define);
               } else {
@@ -73,10 +75,10 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
                 MIB.addReg(UseReg);
               }
             } else {
-              MIB.add(MO); 
+              MIB.add(MO);
             }
           } else {
-            MIB.add(MO); 
+            MIB.add(MO);
           }
         }
       }
@@ -90,6 +92,5 @@ struct DorofeevLoopUnroll : public MachineFunctionPass {
 
 char DorofeevLoopUnroll::ID = 0;
 
-static RegisterPass<DorofeevLoopUnroll> X("dorofeev-loop-unroll", 
-                                          "Backend Loop Unroll Pass", 
-                                          false, false);
+static RegisterPass<DorofeevLoopUnroll>
+    X("dorofeev-loop-unroll", "Backend Loop Unroll Pass", false, false);
