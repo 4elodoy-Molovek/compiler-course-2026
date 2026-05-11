@@ -1,4 +1,4 @@
-// RUN: mlir-opt --load-pass-plugin=../../../lib/dorofeev_i_mlir_depth_MLIR.so --pass-pipeline="builtin.module(func.func(max-block-depth))" %s | FileCheck %s
+// RUN: mlir-opt --load-pass-plugin=%S/../../../../build/lib/dorofeev_i_mlir_depth_MLIR.so --pass-pipeline="builtin.module(func.func(max-block-depth))" %s | FileCheck %s
 
 // CHECK: func.func @empty_func() attributes {max_block_depth = 0 : i32}
 func.func @empty_func() {
